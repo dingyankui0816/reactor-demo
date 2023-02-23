@@ -16,6 +16,10 @@ import java.util.Scanner;
  * 				if (n > 0 && consumer != null && !isCancelled()) {
  * 					consumer.accept(n);
  *              }
+ *
+ *
+ * doc <a href="https://projectreactor.io/docs/core/release/reference/index.html#_a_hybrid_pushpull_model">
+ *
  * @Author: Levi.Ding
  * @Date: 2023/2/23 15:09
  * @Version V1.0
