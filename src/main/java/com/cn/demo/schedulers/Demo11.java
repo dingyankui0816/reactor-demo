@@ -3,10 +3,13 @@ package com.cn.demo.schedulers;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
+import reactor.core.scheduler.Scheduler;
 import reactor.core.scheduler.Schedulers;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
@@ -51,6 +54,8 @@ public class Demo11 {
         boundedElastic();
         //固定池
 //        parallel();
+        //自定义线程池
+//        customExecutorService();
     }
 
 
@@ -140,7 +145,11 @@ public class Demo11 {
         Flux<Integer> range = Flux.range(1, 10);
         new Thread(() -> {
 
-            range.subscribeOn(Schedulers.boundedElastic()).doOnRequest(n -> log.info("ThreadName : {} , Flux1 doOnRequest i : {}",Thread.currentThread().getName(),n)).subscribeOn(Schedulers.boundedElastic()).subscribe((i) -> log.info("ThreadName : {} , Flux1 subscribe i : {}",Thread.currentThread().getName(),i));
+            range
+//                    .subscribeOn(Schedulers.boundedElastic())
+                    .doOnRequest(n -> log.info("ThreadName : {} , Flux1 doOnRequest i : {}",Thread.currentThread().getName(),n))
+                    .subscribeOn(Schedulers.boundedElastic())
+                    .subscribe((i) -> log.info("ThreadName : {} , Flux1 subscribe i : {}",Thread.currentThread().getName(),i));
         }).start();
 //        TimeUnit.SECONDS.sleep(1);
 //        new Thread(() -> {
@@ -166,6 +175,30 @@ public class Demo11 {
         new Thread(() -> {
 
             range.subscribeOn(Schedulers.parallel()).subscribe((i) -> log.info("ThreadName : {} , Flux2 subscribe i : {}",Thread.currentThread().getName(),i));
+        }).start();
+        System.in.read();
+    }
+
+
+    /**
+     * @Description: 自定义线程池 用于 reactor 切换线程上下文
+     * @author Levi.Ding
+     * @date 2023/3/1 14:33
+     * @return : void
+     */
+    public static void customExecutorService() throws IOException, InterruptedException {
+        ExecutorService executorService = Executors.newFixedThreadPool(10);
+        Scheduler scheduler = Schedulers.fromExecutorService(executorService);
+
+        Flux<Integer> range = Flux.range(1, 10);
+        new Thread(() -> {
+
+            range.subscribeOn(scheduler).subscribe((i) -> log.info("ThreadName : {} , Flux1 subscribe i : {}",Thread.currentThread().getName(),i));
+        }).start();
+        TimeUnit.SECONDS.sleep(10);
+        new Thread(() -> {
+
+            range.subscribeOn(scheduler).subscribe((i) -> log.info("ThreadName : {} , Flux2 subscribe i : {}",Thread.currentThread().getName(),i));
         }).start();
         System.in.read();
     }
