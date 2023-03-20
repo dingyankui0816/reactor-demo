@@ -4,7 +4,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 import reactor.core.publisher.Flux;
-import reactor.core.publisher.FluxPublishOn;
 import reactor.core.scheduler.Schedulers;
 
 import java.io.IOException;
@@ -12,10 +11,20 @@ import java.io.IOException;
 /**
  * @Description Flux publishOn
  *
- * 影响发布操作的执行线程，不影响订阅操作的执行线程
+ * 影响后续调用的任务线程，之前的任务线程并不会变更;
+ *
  *
  * 执行顺序  
- * {@link reactor.core.publisher.FluxRange#subscribe(Subscriber)} -> {@link FluxPublishOn.PublishOnSubscriber#onSubscribe(Subscription)}
+ * {@link reactor.core.publisher.FluxRange#subscribe(Subscriber)} -> {@link reactor.core.publisher.FluxPublishOn.PublishOnSubscriber#onSubscribe(Subscription)}
+ * -> {@link reactor.core.publisher.LambdaSubscriber#onSubscribe(Subscription)} -> {@link reactor.core.publisher.FluxPublishOn.PublishOnSubscriber#request(long)} 调用 trySchedule(this, null, null); 开启线程
+ * 开启线程后直接执行 {@link reactor.core.publisher.FluxPublishOn.PublishOnSubscriber#onSubscribe(Subscription)} 中 s.request(Operators.unboundedOrPrefetch(prefetch)); 代码。向上请求数据
+ * 上层生成数据后会调用 a.onNext((int) i); 向下提供数据。当走到 {@link reactor.core.publisher.FluxPublishOn.PublishOnSubscriber#onNext(Object)} 会将数据放到 Queue中
+ * 开启线程后 {@link reactor.core.publisher.FluxPublishOn.PublishOnSubscriber#run()} 会一直阻塞 Queue 的获取，直到获取数据后，向下流转数据至 {@link reactor.core.publisher.LambdaSubscriber#onNext(Object)}
+ *
+ *
+ * doc <a href="https://projectreactor.io/docs/core/release/reference/index.html#_the_publishon_method">
+ *
+ * 基于上述流程发现，PublishOn 方法只会影响 上游往下游传输数据时的线程切换 onNext();
  *
  * @Author: Levi.Ding
  * @Date: 2023/3/1 16:29
