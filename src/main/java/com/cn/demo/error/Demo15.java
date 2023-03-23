@@ -21,7 +21,8 @@ public class Demo15 {
 //        onErrorCompleteVsTryCatch();
 //        onErrorResumeVsOnErrorReturn();
 //        onErrorResumeVsTryCatch();
-        onErrorMapVsTryCatch();
+//        onErrorMapVsTryCatch();
+        doOnErrorVsTryCatch();
     }
 
 
@@ -291,6 +292,41 @@ public class Demo15 {
             }
         } catch (Exception e) {
             throw new RuntimeException("ErrorMap Exception");
+        }
+    }
+
+    /**
+     * @Description: doOnError VS try-catch
+     * @author Levi.Ding
+     * @date 2023/3/23 17:42
+     * @return : void
+     */
+    public static void doOnErrorVsTryCatch(){
+        log.info("-------------------{}---------------------", "doOnError");
+        Flux.range(1, 10).flatMap(i -> {
+            int j = i * 2;
+            if (j == 10) {
+                throw new RuntimeException("FlatMap Exception");
+            }
+            return Flux.just(j);
+        }).doOnError(e -> log.info("由于异常，进行XXXX操作")).subscribe(i -> log.info("i : {}",i));
+
+
+
+        log.info("-------------------{}---------------------", "try-catch");
+
+
+        try {
+            for (int i = 1; i < 10; i++) {
+                if (i * 2 == 10) {
+                    throw new RuntimeException("Test tryCatchOnError");
+                }
+                log.info("i:{}", i * 2);
+
+            }
+        } catch (Exception e) {
+            log.info("由于异常，进行XXXX操作");
+            throw e;
         }
     }
 }
