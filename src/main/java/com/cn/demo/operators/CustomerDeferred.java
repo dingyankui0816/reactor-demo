@@ -10,7 +10,7 @@ import java.util.Scanner;
 /**
  * @Description 自定义延迟订阅
  *
- * {@link reactor.core.publisher.Operators.DeferredSubscription}
+ * 对比: {@link reactor.core.publisher.Operators.DeferredSubscription}
  *
  * @Author: Levi.Ding
  * @Date: 2023/3/28 15:20
