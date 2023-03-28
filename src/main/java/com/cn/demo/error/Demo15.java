@@ -17,7 +17,7 @@ import java.util.function.Function;
  * @Description
  * Flux error  VS   try-catch
  *
- *doc <a href="https://projectreactor.io/docs/core/release/reference/index.html#_error_handling_operators">
+ * doc <a href="https://projectreactor.io/docs/core/release/reference/index.html#_error_handling_operators">
  *
  *
  * @Author: Levi.Ding
