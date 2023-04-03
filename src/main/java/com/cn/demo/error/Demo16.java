@@ -1,17 +1,22 @@
 package com.cn.demo.error;
 
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import org.reactivestreams.Publisher;
 import org.reactivestreams.Subscription;
-import reactor.core.publisher.BaseSubscriber;
-import reactor.core.publisher.Flux;
-import reactor.core.publisher.Operators;
-import reactor.core.publisher.Sinks;
+import reactor.core.Exceptions;
+import reactor.core.publisher.*;
 import reactor.core.scheduler.Schedulers;
+import reactor.util.context.ContextView;
 import reactor.util.retry.Retry;
+import reactor.util.retry.RetryBackoffSpec;
+import reactor.util.retry.RetrySpec;
 
 import java.io.IOException;
 import java.time.Duration;
 import java.util.Scanner;
+import java.util.function.BiFunction;
+import java.util.function.Consumer;
 
 /**
  * @Description Flux retry
@@ -27,8 +32,11 @@ public class Demo16 {
 
     public static void main(String[] args) throws IOException, InterruptedException {
 //        retry();
-        retryWhen();
+//        retryWhen();
 //        testSinks();
+//        retryWhenCustom();
+//        retryClassRetrySpec();
+        retryClassRetryBackoffSpec();
     }
 
     /**
@@ -101,51 +109,106 @@ public class Demo16 {
                 .subscribe(i -> log.info("i : {}", i), e -> log.info("", e), () -> log.info("complete!"));
     }
 
+
+
     /**
-     * @Description:  Sinks.many().multicast().onBackpressureBuffer()
+     * @Description: 自定义重试触发条件
      *
-     *  创建一个多订阅者类型的Sink,配置了一个背压缓冲区（当订阅者处理不过来用于缓存）
-     *
-     * completionSignal.emitNext(s, Sinks.EmitFailureHandler.FAIL_FAST); 执行流程
-     * {@link reactor.core.publisher.InternalManySink#emitNext(java.lang.Object, reactor.core.publisher.Sinks.EmitFailureHandler)} ->
-     * {@link reactor.core.publisher.SinkManySerialized#tryEmitNext(java.lang.Object)} ->
-     * {@link reactor.core.publisher.SinkManyEmitterProcessor#tryEmitNext(java.lang.Object)} ->
-     * 初始化队列 q = Queues.<T>get(prefetch).get(); -> 将当前Sink#next()的数据 offer 到 queue中 ->
-     * {@link reactor.core.publisher.SinkManyEmitterProcessor#drain()} ->
-     * 获取所有subscribers 对比所有的 requested 属性，获取最小的请求数量 maxRequested = Math.min(maxRequested, r); ->
-     * 循环将 requested 数量的生产数据 加入到 所有 subscribers中  inner.actual.onNext(v);
+     * {@link reactor.util.retry.Retry.RetrySignal#totalRetriesInARow()} 当调用
+     * {@link reactor.core.publisher.FluxRetryWhen.RetryWhenMainSubscriber#onNext(java.lang.Object)} 时会初始化该值，
+     * 所以{@link reactor.util.retry.Retry.RetrySignal#totalRetriesInARow()} 当首元素处理成功时 该值会被初始化。没有元素处理成功，
+     * 则该值和 {@link reactor.util.retry.Retry.RetrySignal#totalRetries()} 意义一样
      *
      * @author Levi.Ding
-     * @date 2023/3/28 16:41
+     * @date 2023/3/31 14:04
      * @return : void
      */
-    public static void testSinks() throws IOException, InterruptedException {
-        Sinks.Many<String> completionSignal = Sinks.many().multicast().onBackpressureBuffer();
-        Scanner scan = new Scanner(System.in);
-        new Thread(() -> {
-
-            while (true){
-                String s = scan.nextLine();
-                if (s.equals("end")){
-                    synchronized (Demo16.class){
-                        Demo16.class.notifyAll();
-                    }
-                    return;
-                }
-                completionSignal.emitNext(s, Sinks.EmitFailureHandler.FAIL_FAST);
-
+    public static void retryWhenCustom(){
+        Flux.range(1,10).map(i -> {
+            if (i == 4){
+                throw new RuntimeException();
             }
-        }).start();
-
-        completionSignal.asFlux()
-                .subscribe(i -> log.info("1 {}",i));
-
-        completionSignal.asFlux()
-                .subscribe(i -> log.info("2 {}",i));
-        synchronized (Demo16.class){
-            Demo16.class.wait();
-        }
+            return i;
+        }).retryWhen(new Retry() {
+            @Override
+            public Publisher<?> generateCompanion(Flux<RetrySignal> retrySignals) {
+                return retrySignals.map(r -> {
+                    if (r.totalRetries() >3){
+                        throw Exceptions.propagate(r.failure());
+                    }
+                    log.info("retry count : {}",r.totalRetries());
+                    return r;
+                }).onErrorComplete();
+            }
+        }).subscribe(i -> log.info("i : {}",i),e -> log.info("e :" ,e),() -> log.info("complete!"));
     }
 
 
+    /**
+     * @Description: RetrySpec 【Retry增强类】
+     * {@link reactor.util.retry.RetrySpec}
+     * 增强内容: {@link reactor.util.retry.RetrySpec#generateCompanion(reactor.core.publisher.Flux)}
+     *
+     * 重试执行顺序
+     * {@link reactor.util.retry.RetrySpec#applyHooks(Retry.RetrySignal, Mono, Consumer, Consumer, BiFunction, BiFunction, ContextView)}
+     * 
+     * 
+     * @author Levi.Ding
+     * @date 2023/3/31 14:44
+
+     * @return : void
+     */
+    public static void retryClassRetrySpec(){
+
+        Flux.range(1,10).map(i -> {
+            if (i == 4){
+                throw new RuntimeException("customer exception");
+            }
+            return i;
+        }).retryWhen(RetrySpec.max(4)
+                .transientErrors(false)
+                .doBeforeRetry(r -> log.info("retry before! "))
+                .doAfterRetry(r -> log.info("retry after !"))
+                .doBeforeRetryAsync((r)-> Mono.fromSupplier(() -> {log.info("retry before async!"); return r;}).then())
+                .doAfterRetryAsync((r)-> Mono.fromSupplier(() -> {log.info("retry after async!"); return r;}).publishOn(Schedulers.newSingle("Levi")).then())
+                .onRetryExhaustedThrow((r1,r2)->{throw new RuntimeException("retry max limit ");})
+        ).subscribe(i -> log.info("i : {}",i),e -> log.info("e :" ,e),() -> log.info("complete!"));
+    }
+
+
+    /**
+     * @Description: RetryBackoffSpec 延迟重试类
+     *
+     *
+     * 增强内容: {@link reactor.util.retry.RetryBackoffSpec#generateCompanion(reactor.core.publisher.Flux)}
+     *
+     * 延迟逻辑: {@link reactor.util.retry.RetryBackoffSpec#generateCompanion(reactor.core.publisher.Flux)} 中 Mono.delay(effectiveBackoff, backoffSchedulerSupplier.get())
+     *
+     * RetrySpec.backoff(4,Duration.ofSeconds(1)) -> 重试四次，每次重试间隔时间 1秒 * Math.pow(2,totalRetries);
+     *
+     * @author Levi.Ding
+     * @date 2023/4/3 15:34
+
+     * @return : void
+     */
+    @SneakyThrows
+    public static void retryClassRetryBackoffSpec(){
+        Flux.range(1,10).map(i -> {
+            if (i == 4){
+                throw new RuntimeException("customer exception");
+            }
+            return i;
+        }).retryWhen(RetrySpec.backoff(4,Duration.ofSeconds(1))
+                .transientErrors(false)
+                .doBeforeRetry(r -> log.info("retry before! "))
+                .doAfterRetry(r -> log.info("retry after !"))
+                .doBeforeRetryAsync((r)-> Mono.fromSupplier(() -> {log.info("retry before async!"); return r;}).then())
+                .doAfterRetryAsync((r)-> Mono.fromSupplier(() -> {log.info("retry after async!"); return r;}).publishOn(Schedulers.newSingle("Levi")).then())
+                .onRetryExhaustedThrow((r1,r2)->{throw new RuntimeException("retry max limit ");})
+
+        ).subscribe(i -> log.info("i : {}",i),e -> log.info("e :" ,e),() -> log.info("complete!"));
+
+        System.in.read();
+
+    }
 }
