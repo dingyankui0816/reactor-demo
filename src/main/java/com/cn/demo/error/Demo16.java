@@ -36,7 +36,8 @@ public class Demo16 {
 //        testSinks();
 //        retryWhenCustom();
 //        retryClassRetrySpec();
-        retryClassRetryBackoffSpec();
+//        retryClassRetryBackoffSpec();
+        throwShowException();
     }
 
     /**
@@ -210,5 +211,22 @@ public class Demo16 {
 
         System.in.read();
 
+    }
+
+    /**
+     * @Description: 捕获显示异常，并将显示异常往下传输 ！
+     * @author Levi.Ding
+     * @date 2023/4/3 15:58
+     * @return : void
+     */
+    public static void throwShowException(){
+        Flux.range(1,10).map(i -> {
+            if (i == 4){
+                throw  Exceptions.propagate( new IOException("customer exception"));
+            }
+            return i;
+        })
+        .onErrorComplete(e -> Exceptions.unwrap(e) instanceof IOException)
+        .subscribe(i -> log.info("i : {}",i),e -> log.info("e :" ,e),() -> log.info("complete!"));
     }
 }

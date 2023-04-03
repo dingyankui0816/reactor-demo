@@ -18,7 +18,8 @@ public class CustomerSinks {
 
 
     public static void main(String[] args) throws IOException, InterruptedException {
-        testSinks();
+//        testSinks();
+        testOneSinks();
     }
 
     /**
@@ -53,7 +54,6 @@ public class CustomerSinks {
                     return;
                 }
                 completionSignal.emitNext(s, Sinks.EmitFailureHandler.FAIL_FAST);
-
             }
         }).start();
 
@@ -65,5 +65,23 @@ public class CustomerSinks {
         synchronized (Demo16.class){
             Demo16.class.wait();
         }
+    }
+
+
+
+    /**
+     * @Description: Sinks.one()，创建多订阅者模式的Sink,当前Sink只支持next 一条数据
+     * @author Levi.Ding
+     * @date 2023/4/3 16:35
+     * @return : void
+     */
+    public static void testOneSinks(){
+        Sinks.One<String> completionSignal = Sinks.one();
+
+        completionSignal.asMono().subscribe(i -> log.info("Mono Subscribe i : {}",i),e -> log.info("error e : ",e),() -> log.info("complete!"));
+
+        completionSignal.asMono().subscribe(i -> log.info("Mono Subscribe i : {}",i),e -> log.info("error e : ",e),() -> log.info("complete!"));
+        completionSignal.tryEmitValue("one");
+        completionSignal.tryEmitValue("tow");
     }
 }
