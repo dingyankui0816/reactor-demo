@@ -1,11 +1,15 @@
 package com.cn.demo.sinks;
 
 import com.cn.demo.error.Demo16;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import org.reactivestreams.Subscription;
+import reactor.core.publisher.BaseSubscriber;
 import reactor.core.publisher.Sinks;
 
 import java.io.IOException;
 import java.util.Scanner;
+import java.util.concurrent.TimeUnit;
 
 /**
  * @Description Sinks
@@ -19,7 +23,8 @@ public class CustomerSinks {
 
     public static void main(String[] args) throws IOException, InterruptedException {
 //        testSinks();
-        testOneSinks();
+//        testOneSinks();
+        sinksManyType();
     }
 
     /**
@@ -83,5 +88,70 @@ public class CustomerSinks {
         completionSignal.asMono().subscribe(i -> log.info("Mono Subscribe i : {}",i),e -> log.info("error e : ",e),() -> log.info("complete!"));
         completionSignal.tryEmitValue("one");
         completionSignal.tryEmitValue("tow");
+    }
+
+
+
+
+    @SneakyThrows
+    public  static void sinksManyType(){
+
+        sinksManyMulticast();
+
+    }
+
+
+    public static void sinksManyMulticast() throws IOException {
+        Sinks.MulticastSpec multicast = Sinks.many().multicast();
+
+        //直接传输(不支持背压)
+        Sinks.Many<Object> directMany = multicast.directBestEffort();
+        directMany.asFlux().limitRate(100).subscribe(i -> {
+            try {
+                TimeUnit.SECONDS.sleep(2);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            log.info("direct subscribe i : {}",i);
+        });
+        for (int i = 0; i < 10; i++) {
+
+            createThread(i,"direct",directMany);
+        }
+
+        //支持背压
+        Sinks.Many<Object> backMany = multicast.onBackpressureBuffer();
+        backMany.asFlux().limitRate(100).subscribe(i -> {
+            try {
+                TimeUnit.SECONDS.sleep(2);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            log.info("back subscribe i : {}",i);
+        });
+            for (int i = 0; i < 10; i++) {
+
+                createThread(i,"back",backMany);
+            }
+
+        System.in.read();
+
+    }
+
+    /**
+     * @Description: 创建线程
+     * @author Levi.Ding
+     * @date 2023/4/4 17:51
+     * @param i :
+     * @param type :
+     * @param many :
+     * @return : void
+     */
+    public static void createThread(int i,String type,Sinks.Many<Object> many){
+        new Thread(() -> {
+            long start = System.currentTimeMillis();
+            many.tryEmitNext(i);
+            log.info("{} send message sum : {} ms",type,System.currentTimeMillis() - start);
+        }).start();
     }
 }
