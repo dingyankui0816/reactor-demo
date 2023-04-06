@@ -1,13 +1,18 @@
 package com.cn.demo.sinks;
 
+import com.alibaba.fastjson.JSON;
 import com.cn.demo.error.Demo16;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.reactivestreams.Subscription;
 import reactor.core.publisher.BaseSubscriber;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
+import reactor.core.scheduler.Schedulers;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.Scanner;
 import java.util.concurrent.TimeUnit;
 
@@ -24,7 +29,8 @@ public class CustomerSinks {
     public static void main(String[] args) throws IOException, InterruptedException {
 //        testSinks();
 //        testOneSinks();
-        sinksManyType();
+//        sinksManyUnicast();
+        sinksManyReplay();
     }
 
     /**
@@ -75,7 +81,7 @@ public class CustomerSinks {
 
 
     /**
-     * @Description: Sinks.one()，创建多订阅者模式的Sink,当前Sink只支持next 一条数据
+     * @Description: Sinks.one()，创建多订阅者模式的Sink,当前Sink只支持next 一条数据 ，类似于 Mono
      * @author Levi.Ding
      * @date 2023/4/3 16:35
      * @return : void
@@ -91,48 +97,66 @@ public class CustomerSinks {
     }
 
 
-
-
-    @SneakyThrows
-    public  static void sinksManyType(){
-
-        sinksManyMulticast();
-
-    }
-
-
+    /**
+     * @Description:
+     *
+     * multicast 可以有多个订阅者，每个订阅者并不会都拿到全部且一样的元素，而是只会取得订阅后开始最新的。
+     *
+     * multicast.directBestEffort() 不支持背压，当生产元素比消费 所用时间还长时 会出现丢失数据。多订阅者，只会丢失 未消费完成的订阅者链路数据
+     *
+     * multicast.onBackpressureBuffer() 支持背压，通过Queue 缓存未被消费当元素，需要控制Queue长度
+     *
+     * multicast.directAllOrNothing() 当订阅者中有一个订阅者消费还没结束，此时继续生产数据，则所有消费者都无法消费此数据
+     *
+     * @author Levi.Ding
+     * @date 2023/4/6 16:33
+     * @return : void
+     */
     public static void sinksManyMulticast() throws IOException {
         Sinks.MulticastSpec multicast = Sinks.many().multicast();
 
         //直接传输(不支持背压)
         Sinks.Many<Object> directMany = multicast.directBestEffort();
-        directMany.asFlux().limitRate(100).subscribe(i -> {
-            try {
-                TimeUnit.SECONDS.sleep(2);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-            log.info("direct subscribe i : {}",i);
-        });
-        for (int i = 0; i < 10; i++) {
 
-            createThread(i,"direct",directMany);
-        }
+        BaseSubscriber<Object> directS = new BaseSubscriber<Object>() {
+
+
+            @Override
+            protected void hookOnSubscribe(Subscription subscription) {
+                log.info("不处理数据");
+            }
+
+            @Override
+            protected void hookOnNext(Object value) {
+                log.info("direct subscribe i : {}", value);
+            }
+        };
+
+        directMany.asFlux().subscribe(directS);
+
+        createThread("direct", directMany,directS);
+
+
 
         //支持背压
         Sinks.Many<Object> backMany = multicast.onBackpressureBuffer();
-        backMany.asFlux().limitRate(100).subscribe(i -> {
-            try {
-                TimeUnit.SECONDS.sleep(2);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-            log.info("back subscribe i : {}",i);
-        });
-            for (int i = 0; i < 10; i++) {
+        BaseSubscriber<Object> backS = new BaseSubscriber<Object>() {
 
-                createThread(i,"back",backMany);
+
+            @Override
+            protected void hookOnSubscribe(Subscription subscription) {
+                log.info("不处理数据");
             }
+
+            @Override
+            protected void hookOnNext(Object value) {
+                log.info("back subscribe i : {}", value);
+            }
+        };
+
+        backMany.asFlux().subscribe(backS);
+
+        createThread("back", backMany,backS);
 
         System.in.read();
 
@@ -142,16 +166,57 @@ public class CustomerSinks {
      * @Description: 创建线程
      * @author Levi.Ding
      * @date 2023/4/4 17:51
-     * @param i :
      * @param type :
      * @param many :
      * @return : void
      */
-    public static void createThread(int i,String type,Sinks.Many<Object> many){
+    public static void createThread(String type,Sinks.Many<Object> many,BaseSubscriber<Object> b){
+
         new Thread(() -> {
-            long start = System.currentTimeMillis();
-            many.tryEmitNext(i);
-            log.info("{} send message sum : {} ms",type,System.currentTimeMillis() - start);
+            for (int i = 0; i < 10; i++) {
+
+                long start = System.currentTimeMillis();
+                Sinks.EmitResult emitResult = many.tryEmitNext(i);
+                log.info("{} send message sum : {} ms , result : {}", type, System.currentTimeMillis() - start, JSON.toJSONString(emitResult));
+                if (i == 5){
+                    b.request(Integer.MAX_VALUE);
+                }
+            }
         }).start();
+    }
+
+
+    /**
+     * @Description: unicast 仅支持一个订阅者
+     * @author Levi.Ding
+     * @date 2023/4/6 16:44
+     * @return : void
+     */
+    public static void sinksManyUnicast(){
+        Sinks.Many<Object> back = Sinks.many().unicast().onBackpressureBuffer();
+        back.tryEmitNext(1);
+        back.tryEmitNext(2);
+        back.asFlux().subscribe(i -> log.info("subscribe1 i : {}",i));
+        back.tryEmitNext(3);
+        back.tryEmitNext(4);
+        back.asFlux().subscribe(i -> log.info("subscribe2 i : {}",i));
+        back.tryEmitNext(5);
+    }
+
+    /**
+     * @Description: 支持所有订阅者获取到订阅前到数据并消费
+     * @author Levi.Ding
+     * @date 2023/4/6 16:46
+     * @return : void
+     */
+    public static void sinksManyReplay(){
+        Sinks.Many<Object> back = Sinks.many().replay().all();
+        back.tryEmitNext(1);
+        back.tryEmitNext(2);
+        back.asFlux().subscribe(i -> log.info("subscribe1 i : {}",i));
+        back.tryEmitNext(3);
+        back.tryEmitNext(4);
+        back.asFlux().subscribe(i -> log.info("subscribe2 i : {}",i));
+        back.tryEmitNext(5);
     }
 }
