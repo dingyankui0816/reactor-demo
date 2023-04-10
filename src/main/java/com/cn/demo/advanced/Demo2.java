@@ -1,11 +1,15 @@
 package com.cn.demo.advanced;
 
 import lombok.extern.slf4j.Slf4j;
+import reactor.core.publisher.ConnectableFlux;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Sinks;
 
 /**
  * @Description Flux 静态/动态流
+ *
+ * doc <a href="https://projectreactor.io/docs/core/release/reference/index.html#reactor.hotCold">
+ *
  * @Author: Levi.Ding
  * @Date: 2023/4/7 14:42
  * @Version V1.0
@@ -16,7 +20,8 @@ public class Demo2 {
 
     public static void main(String[] args) {
 //        cold();
-        hot();
+//        hot();
+        share();
     }
 
     /**
@@ -26,7 +31,7 @@ public class Demo2 {
      * @return : void
      */
     public static void cold(){
-        Flux<Integer> range = Flux.range(1, 10).share();
+        Flux<Integer> range = Flux.range(1, 10);
 
         range.subscribe(i -> log.info("subscribe1 i : {}",i));
         range.subscribe(i -> log.info("subscribe2 i : {}",i));
@@ -53,5 +58,18 @@ public class Demo2 {
             range.tryEmitNext(i);
 
         }
+    }
+
+    /**
+     * @Description: This is an alias for {@link Flux#publish()}.{@link ConnectableFlux#refCount()}.
+     * @author Levi.Ding
+     * @date 2023/4/10 10:39
+     * @return : void
+     */
+    public static void share(){
+        Flux<Integer> range = Flux.range(1, 10).share();
+
+        range.subscribe(i -> log.info("subscribe1 i : {}",i));
+        range.subscribe(i -> log.info("subscribe2 i : {}",i));
     }
 }
