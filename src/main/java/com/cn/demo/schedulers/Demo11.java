@@ -132,7 +132,16 @@ public class Demo11 {
      * {@link reactor.core.scheduler.BoundedElasticScheduler.BoundedServices#eviction()}   初始化定时器用于检测当前 {@link reactor.core.scheduler.BoundedElasticScheduler.BoundedState} 是否需要销毁 ->
      * 提交 Runnable ->
      * {@link reactor.core.scheduler.BoundedElasticScheduler#schedule(Runnable)} ->
-     * {@link reactor.core.scheduler.BoundedElasticScheduler.BoundedServices#pick()} 获取 {@link reactor.core.scheduler.BoundedElasticScheduler.BoundedState} ，不存在可用， 则基于 maxThreads创建/任务最少的 获取 ->
+     * {@link reactor.core.scheduler.BoundedElasticScheduler.BoundedServices#pick()} 获取 {@link reactor.core.scheduler.BoundedElasticScheduler.BoundedState}
+     * ，不存在可用State， 则基于 maxThreads创建/任务最少的 获取
+     * (
+     *     1、如果当前thread未超过maxThreads 则创建一个 State,ScheduledExecutorService
+     *          · ScheduledExecutorService s = Schedulers.decorateExecutorService(parent, parent.createBoundedExecutorService())
+     *          · BoundedState newState = new BoundedState(this, s);
+     *     2、如果当前threadCount超过maxThreads 则任务最少的 State
+     * )
+     *
+     * ->
      * {@link reactor.core.scheduler.Schedulers#directSchedule(ScheduledExecutorService, Runnable, Disposable, long, TimeUnit)} 执行任务
      *
      * 注) {@link reactor.core.scheduler.BoundedElasticScheduler.BoundedState} 只会在 dispose 后才释放任务执行完信号，直到所有执行完毕后才会进行空闲释放检查

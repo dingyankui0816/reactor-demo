@@ -4,11 +4,13 @@ import com.alibaba.fastjson.JSON;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
 
-import java.util.List;
 import java.util.function.Function;
 
 /**
  * @Description Flux batch
+ *
+ * doc <a href="https://projectreactor.io/docs/core/release/reference/index.html#advanced-three-sorts-batching">
+ *
  * @Author: Levi.Ding
  * @Date: 2023/4/10 13:21
  * @Version V1.0
@@ -20,7 +22,9 @@ public class Demo4 {
 //        groupedFlux();
 //        windowFlux();
 //        windowUntil();
-        windowWhile();
+//        windowWhile();
+//        bufferFlux();
+        bufferWhile();
     }
 
 
@@ -95,5 +99,35 @@ public class Demo4 {
     public static void windowWhile(){
         Flux.range(1,10).windowWhile(i -> i.equals(5)).flatMap(f -> f.doOnComplete(() -> log.info("onComplete!")).collectList()).subscribe(i -> log.info("windowUntil i : {}",JSON.toJSONString(i)));
     }
+
+    /**
+     * @Description: buffer 重塑 {@link com.cn.demo.simple.Demo10#reshapeRequests() }
+     * @author Levi.Ding
+     * @date 2023/4/11 14:30
+     * @return : void
+     */
+    public static void bufferFlux(){
+        // size == skip
+        log.info("size == skip");
+        Flux.range(1,10).buffer(3).subscribe(i -> log.info("subscribe i : {}",JSON.toJSONString(i)));
+        // size > skip
+        log.info("size > skip");
+        Flux.range(1,10).buffer(3,1).subscribe(i -> log.info("subscribe i : {}",JSON.toJSONString(i)));
+        // size < skip
+        log.info("size < skip");
+        Flux.range(1,10).buffer(3,4).subscribe(i -> log.info("subscribe i : {}",JSON.toJSONString(i)));
+    }
+
+    /**
+     * @Description: bufferWhile 与 windowWhile 的区别
+     * {@link com.cn.demo.advanced.Demo4#windowWhile()}
+     * @author Levi.Ding
+     * @date 2023/4/11 14:40
+     * @return : void
+     */
+    public static void bufferWhile(){
+        Flux.just(1,2,12,3,4,5,6,7,8,9,10).bufferWhile(i -> i%2 == 0).subscribe(i -> log.info("subscribe i : {}",JSON.toJSONString(i)));
+    }
+
 
 }
