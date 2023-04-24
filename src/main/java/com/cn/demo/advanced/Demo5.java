@@ -11,7 +11,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * @Description 并行化 Flux
  *
- *      *  doc <a href="https://projectreactor.io/docs/core/release/reference/index.html#advanced-parallelizing-parralelflux">
+ *   doc <a href="https://projectreactor.io/docs/core/release/reference/index.html#advanced-parallelizing-parralelflux">
  *
  * @Author: Levi.Ding
  * @Date: 2023/4/11 14:50
