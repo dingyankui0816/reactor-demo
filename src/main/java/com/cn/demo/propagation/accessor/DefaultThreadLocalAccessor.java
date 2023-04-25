@@ -4,7 +4,7 @@ import com.cn.demo.propagation.Demo1;
 import io.micrometer.context.ThreadLocalAccessor;
 
 /**
- * @Description todo
+ * @Description  DefaultThreadLocalAccessor
  * @Author: Levi.Ding
  * @Date: 2023/4/24 17:34
  * @Version V1.0

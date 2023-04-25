@@ -1,6 +1,7 @@
 package com.cn.demo.propagation;
 
 import com.alibaba.fastjson.JSONObject;
+import com.cn.demo.propagation.listener.DefaultThreadSignalListener;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Mono;
 
@@ -26,7 +27,9 @@ public class Demo1 {
 
 
     public static void main(String[] args) {
-        compatibleThreadLocal();
+//        compatibleThreadLocal();
+//        handleTapThreadLocal();
+        tapThreadLocal();
     }
 
 
@@ -51,4 +54,46 @@ public class Demo1 {
 
         log.info("value : {}",mono);
     }
+
+
+    /**
+     * @Description: handle()中可以将context-propagation 中 ContextSnapshot 快照中的 ThreadLocal值进行恢复，
+     * 恢复流程
+     *
+     * 1、通过 contextCapture() 将ThreadLocal的值进行快照
+     * 2、在handle中 {@link reactor.core.publisher.MonoHandle#subscribeOrReturn(reactor.core.CoreSubscriber)}进行快照恢复
+     *          ContextPropagation.contextRestoreForHandle(this.handler, actual::currentContext); 恢复逻辑
+     *
+     * @author Levi.Ding
+     * @date 2023/4/25 10:55
+     * @return : void
+     */
+    public static void handleTapThreadLocal(){
+        threadLocal.set("handle");
+        String msg = Mono.delay(Duration.ofSeconds(1))
+                .doOnNext(v -> log.info("{}", threadLocal.get()))
+                .<String>handle((v, s) -> s.next("handle value : " + threadLocal.get()+ "ThreadName : "+Thread.currentThread().getName()))
+                .doOnNext(v -> log.info("{}", threadLocal.get()))
+                .contextCapture()
+                .block();
+        log.info(msg);
+    }
+
+    /**
+     * @Description: tap()与handle 的原理差不多，区别在于 tap 最终是一个 SignalListener，
+     * 使用静态代理 将快照ThreadLocal进行还原 {@link reactor.core.publisher.ContextPropagation.ContextRestoreSignalListener}
+     * @author Levi.Ding
+     * @date 2023/4/25 11:26
+     * @return : void
+     */
+    public static void tapThreadLocal(){
+        threadLocal.set("tap");
+        Mono.delay(Duration.ofSeconds(1))
+                .doOnNext(v -> log.info("{}", threadLocal.get()))
+                .tap(()->new DefaultThreadSignalListener(i -> log.info("thread value : {} ,listener value : {}",threadLocal.get(),i)))
+                .doOnNext(v -> log.info("{}", threadLocal.get()))
+                .contextCapture()
+                .block();
+    }
+
 }
